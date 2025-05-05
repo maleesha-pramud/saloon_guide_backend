@@ -4,6 +4,7 @@ import { RequestHandler } from 'express';
 import bcrypt from 'bcrypt';
 import { createUserSchema, updateUserSchema, loginSchema } from '../validations';
 import { generateToken } from '../services/token.service';
+import { sendLoginToken } from '../services/email.service';
 
 // Salt rounds for bcrypt
 const SALT_ROUNDS = 10;
@@ -74,11 +75,26 @@ export const signupOwner: RequestHandler = async (req, res) => {
             [name, email, hashedPassword, phone || null, 2]
         );
 
+        // Generate JWT token for the new user
+        const token = generateToken({
+            userId: result.insertId,
+            email: email,
+            roleId: 2
+        });
+
+        // Store the token in the database
+        await pool.query('UPDATE users SET token = ? WHERE id = ?', [token, result.insertId]);
+
+        // Send token to user's email
+        const emailSent = await sendLoginToken(email, name, token);
+
         res.status(201).json({
             status: true,
             data: {
-                message: 'Owner registered successfully',
-                userId: result.insertId
+                message: 'Owner registered successfully' + (emailSent ? ', token sent to your email' : ''),
+                userId: result.insertId,
+                token,
+                emailSent
             }
         });
     } catch (error: any) {
@@ -113,11 +129,26 @@ export const signupGuest: RequestHandler = async (req, res) => {
             [name, email, hashedPassword, phone || null, 3]
         );
 
+        // Generate JWT token for the new user
+        const token = generateToken({
+            userId: result.insertId,
+            email: email,
+            roleId: 3
+        });
+
+        // Store the token in the database
+        await pool.query('UPDATE users SET token = ? WHERE id = ?', [token, result.insertId]);
+
+        // Send token to user's email
+        const emailSent = await sendLoginToken(email, name, token);
+
         res.status(201).json({
             status: true,
             data: {
-                message: 'Guest user registered successfully',
-                userId: result.insertId
+                message: 'Guest user registered successfully' + (emailSent ? ', token sent to your email' : ''),
+                userId: result.insertId,
+                token,
+                emailSent
             }
         });
     } catch (error: any) {
