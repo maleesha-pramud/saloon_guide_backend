@@ -3,16 +3,101 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create a transporter using environment variables
+// Create a transporter with improved timeout options
 const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-    },
+  host: process.env.EMAIL_HOST,
+  port: parseInt(process.env.EMAIL_PORT || '587'),
+  secure: process.env.EMAIL_SECURE === 'true',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+  // Increase timeout settings to handle slow SMTP servers
+  connectionTimeout: 30000, // 30 seconds (increased from 10)
+  greetingTimeout: 30000,   // 30 seconds (increased from 10)
+  socketTimeout: 60000,     // 60 seconds (increased from 15)
 });
+
+// Create a backup transporter with different settings as fallback
+const backupTransporter = nodemailer.createTransport({
+  host: process.env.BACKUP_EMAIL_HOST || process.env.EMAIL_HOST,
+  port: parseInt(process.env.BACKUP_EMAIL_PORT || process.env.EMAIL_PORT || '587'),
+  secure: (process.env.BACKUP_EMAIL_SECURE || process.env.EMAIL_SECURE) === 'true',
+  auth: {
+    user: process.env.BACKUP_EMAIL_USER || process.env.EMAIL_USER,
+    pass: process.env.BACKUP_EMAIL_PASSWORD || process.env.EMAIL_PASSWORD,
+  },
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 60000,
+});
+
+/**
+ * Verify if the email transporter connection is working
+ * @param useBackup Whether to use the backup transporter
+ * @returns Promise resolving to boolean indicating if connection is successful
+ */
+export const verifyEmailConnection = async (useBackup = false): Promise<boolean> => {
+  try {
+    const currentTransporter = useBackup ? backupTransporter : transporter;
+    const verification = await currentTransporter.verify();
+    console.log(`Email service (${useBackup ? 'backup' : 'primary'}) is ready:`, verification);
+    return verification;
+  } catch (error: any) {
+    console.error(`Email service (${useBackup ? 'backup' : 'primary'}) verification failed:`, error);
+    // Detailed logging for SMTP connection errors
+    if (error.code) {
+      console.error(`SMTP error code: ${error.code}, command: ${error.command || 'N/A'}`);
+    }
+
+    // If primary connection failed, try backup unless we're already using backup
+    if (!useBackup) {
+      console.log('Attempting to verify backup email connection...');
+      return verifyEmailConnection(true);
+    }
+
+    return false;
+  }
+};
+
+/**
+ * Send an email with retry functionality
+ * @param mailOptions Email options
+ * @param retries Number of retry attempts (default: 2)
+ * @param useBackup Whether to use the backup transporter
+ * @returns Promise resolving to boolean indicating success
+ */
+async function sendMailWithRetry(
+  mailOptions: nodemailer.SendMailOptions,
+  retries = 2,
+  useBackup = false
+): Promise<boolean> {
+  try {
+    const currentTransporter = useBackup ? backupTransporter : transporter;
+    await currentTransporter.sendMail(mailOptions);
+    console.log(`Email sent successfully using ${useBackup ? 'backup' : 'primary'} transporter`);
+    return true;
+  } catch (error: any) {
+    console.error(`Error sending email (attempts left: ${retries}):`, error);
+
+    // Log detailed SMTP error information
+    if (error.code) {
+      console.error(`SMTP error code: ${error.code}, command: ${error.command || 'N/A'}`);
+    }
+
+    if (retries > 0) {
+      console.log(`Retrying email delivery in 3 seconds...`);
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds before retry
+      return sendMailWithRetry(mailOptions, retries - 1, useBackup);
+    } else if (!useBackup) {
+      // Try backup transporter if primary failed after all retries
+      console.log('Switching to backup email transporter...');
+      return sendMailWithRetry(mailOptions, 2, true);
+    }
+
+    return false;
+  }
+}
 
 /**
  * Send an email with the login token
@@ -22,12 +107,18 @@ const transporter = nodemailer.createTransport({
  * @returns Promise resolving to boolean indicating success
  */
 export const sendLoginToken = async (to: string, name: string, token: string): Promise<boolean> => {
-    try {
-        await transporter.sendMail({
-            from: `"${process.env.EMAIL_FROM_NAME || 'Saloon Guide'}" <${process.env.EMAIL_FROM || 'noreply@saloonguide.com'}>`,
-            to,
-            subject: 'Welcome to Saloon Guide - Your Registration Token',
-            html: `
+  // Verify connection before attempting to send
+  const isConnected = await verifyEmailConnection();
+  if (!isConnected) {
+    console.error('Failed to establish email service connection');
+    return false;
+  }
+
+  const mailOptions = {
+    from: `"${process.env.EMAIL_FROM_NAME || 'Saloon Guide'}" <${process.env.EMAIL_FROM || 'noreply@saloonguide.com'}>`,
+    to,
+    subject: 'Welcome to Saloon Guide - Your Registration Token',
+    html: `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -74,10 +165,19 @@ export const sendLoginToken = async (to: string, name: string, token: string): P
         </body>
         </html>
       `
-        });
-        return true;
-    } catch (error) {
-        console.error('Error sending email:', error);
-        return false;
+  };
+
+  try {
+    // Use the retry mechanism
+    const result = await sendMailWithRetry(mailOptions);
+    if (result) {
+      console.log(`Email successfully sent to ${to}`);
+    } else {
+      console.error(`Failed to send email to ${to} after multiple attempts`);
     }
+    return result;
+  } catch (error) {
+    console.error('Error in sendLoginToken:', error);
+    return false;
+  }
 };

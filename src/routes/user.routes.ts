@@ -4,21 +4,21 @@ import { authenticate, authorizeAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Public authentication routes
-router.post('/owner/signup', userController.signupOwner);
-router.post('/guest/signup', userController.signupGuest);
-router.post('/login', userController.login);
-
-router.get('/owner', authenticate, authorizeAdmin, userController.getAllOwnerUsers);
-router.post('/owner', authenticate, authorizeAdmin, userController.createOwnerUser);
-router.put('/owner/:id', authenticate, userController.updateOwnerUser);
-
-router.get('/guest', authenticate, authorizeAdmin, userController.getAllGuestUsers);
-router.post('/guest', authenticate, authorizeAdmin, userController.createGuestUser);
-router.put('/guest/:id', authenticate, userController.updateGuestUser);
-
-// Protected routes - require authentication
+// User management routes
+router.get('', authenticate, authorizeAdmin, userController.getAllUsers);
 router.get('/:id', authenticate, userController.getUserById);
+router.put('/:id', authenticate, userController.updateUser);
 router.delete('/:id', authenticate, authorizeAdmin, userController.deleteUser);
+
+// Legacy routes for backward compatibility
+router.post('/owner/signup', userController.registerUser);
+router.post('/guest/signup', userController.registerUser);
+router.post('/login', userController.login);
+router.get('/owner', authenticate, authorizeAdmin, userController.getAllOwnerUsers);
+router.post('/owner', authenticate, authorizeAdmin, userController.createUser);
+router.put('/owner/:id', authenticate, userController.updateUser);
+router.get('/guest', authenticate, authorizeAdmin, userController.getAllGuestUsers);
+router.post('/guest', authenticate, authorizeAdmin, userController.createUser);
+router.put('/guest/:id', authenticate, userController.updateUser);
 
 export default router;

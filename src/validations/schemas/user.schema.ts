@@ -13,7 +13,8 @@ export const createUserSchema = Joi.object({
         .pattern(/^\+?[0-9]{10,15}$/)
         .message('Invalid phone number format')
         .allow(null, '')
-        .optional()
+        .optional(),
+    role: Joi.string().valid('owner', 'guest').default('guest').optional()
 });
 
 // User update validation schema

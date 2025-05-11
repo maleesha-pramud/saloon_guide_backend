@@ -10,29 +10,39 @@ servers:
 
 tags:
   - name: Authentication
-    description: Authentication endpoints for login and signup
-  - name: Owner Management
-    description: Owner user management endpoints
-  - name: Guest Management
-    description: Guest user management endpoints
+    description: Authentication endpoints for login, registration and profile management
   - name: User Management
     description: General user management endpoints
+  - name: Saloons
+    description: Saloon management endpoints for creating and managing saloons
+  - name: Appointments
+    description: Appointment booking and management endpoints
 
+# Include path files directly
 paths:
-  # Authentication Routes
-  /users/owner/signup:
+  # Authentication paths
+  /auth/register:
     post:
-      summary: Register a new salon owner account
+      summary: Register a new user (salon owner or guest)
       tags: [Authentication]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateUser"
+              allOf:
+                - $ref: "#/components/schemas/CreateUser"
+                - type: object
+                  properties:
+                    role:
+                      type: string
+                      enum: [owner, guest]
+                      default: guest
+                      example: owner
+                      description: User role (owner or guest)
       responses:
         "201":
-          description: Owner registered successfully
+          description: User registered successfully
           content:
             application/json:
               schema:
@@ -46,47 +56,16 @@ paths:
                     properties:
                       message:
                         type: string
-                        example: Owner registered successfully
+                        example: owner registered successfully, token sent to your email
                       userId:
                         type: integer
                         example: 1
-        "400":
-          $ref: "#/components/responses/ValidationError"
-        "409":
-          $ref: "#/components/responses/ConflictError"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-  /users/guest/signup:
-    post:
-      summary: Register a new guest account
-      tags: [Authentication]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUser"
-      responses:
-        "201":
-          description: Guest user registered successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      message:
+                      token:
                         type: string
-                        example: Guest user registered successfully
-                      userId:
-                        type: integer
-                        example: 3
+                        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                      emailSent:
+                        type: boolean
+                        example: true
         "400":
           $ref: "#/components/responses/ValidationError"
         "409":
@@ -94,7 +73,7 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
-  /users/login:
+  /auth/login:
     post:
       summary: User login
       tags: [Authentication]
@@ -144,16 +123,49 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
-  # Owner User Management Routes
-  /users/owner:
+  /auth/me:
     get:
-      summary: Get all owner users
-      tags: [Owner Management]
+      summary: Get current authenticated user profile
+      tags: [Authentication]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: A list of owner users
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # User Management Routes
+  /users:
+    get:
+      summary: Get all users (admin only)
+      tags: [User Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          description: Filter users by role ID (2=owner, 3=guest)
+          schema:
+            type: integer
+            enum: [2, 3]
+      responses:
+        "200":
+          description: A list of users
           content:
             application/json:
               schema:
@@ -173,214 +185,6 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
-    post:
-      summary: Create a new owner user
-      tags: [Owner Management]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUser"
-      responses:
-        "201":
-          description: Owner user created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: User created successfully
-                      userId:
-                        type: integer
-                        example: 2
-        "400":
-          $ref: "#/components/responses/ValidationError"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
-        "409":
-          $ref: "#/components/responses/ConflictError"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-  /users/owner/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: integer
-        description: Owner User ID
-    put:
-      summary: Update owner user
-      tags: [Owner Management]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateUser"
-      responses:
-        "200":
-          description: Owner user updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: User updated successfully
-        "400":
-          $ref: "#/components/responses/ValidationError"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "404":
-          $ref: "#/components/responses/NotFoundError"
-        "409":
-          $ref: "#/components/responses/ConflictError"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-  # Guest User Management Routes
-  /users/guest:
-    get:
-      summary: Get all guest users
-      tags: [Guest Management]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: A list of guest users
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/User"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-    post:
-      summary: Create a new guest user
-      tags: [Guest Management]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUser"
-      responses:
-        "201":
-          description: Guest user created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: User created successfully
-                      userId:
-                        type: integer
-                        example: 3
-        "400":
-          $ref: "#/components/responses/ValidationError"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
-        "409":
-          $ref: "#/components/responses/ConflictError"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-  /users/guest/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: integer
-        description: Guest User ID
-    put:
-      summary: Update guest user
-      tags: [Guest Management]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateUser"
-      responses:
-        "200":
-          description: Guest user updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: User updated successfully
-        "400":
-          $ref: "#/components/responses/ValidationError"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "404":
-          $ref: "#/components/responses/NotFoundError"
-        "409":
-          $ref: "#/components/responses/ConflictError"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-  # General User Management Routes
   /users/{id}:
     parameters:
       - name: id
@@ -413,9 +217,46 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "500":
           $ref: "#/components/responses/ServerError"
-
+    put:
+      summary: Update user
+      tags: [User Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUser"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: User updated successfully
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/ServerError"
     delete:
-      summary: Delete user
+      summary: Delete user (admin only)
       tags: [User Management]
       security:
         - bearerAuth: []
@@ -445,8 +286,532 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  # Saloon Routes
+  /saloons:
+    post:
+      summary: Create a new saloon
+      tags: [Saloons]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaloon"
+      responses:
+        "201":
+          description: Saloon created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Salon created successfully
+                      saloonId:
+                        type: integer
+                        example: 1
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+    get:
+      summary: Get all saloons
+      tags: [Saloons]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of items per page
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search term for filtering saloons
+      responses:
+        "200":
+          description: List of saloons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      saloons:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Saloon"
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 10
+                          total:
+                            type: integer
+                            example: 50
+                          totalPages:
+                            type: integer
+                            example: 5
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /saloons/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Saloon ID
+    get:
+      summary: Get saloon by ID
+      tags: [Saloons]
+      responses:
+        "200":
+          description: Saloon details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/SaloonWithServices"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      summary: Update saloon
+      tags: [Saloons]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSaloon"
+      responses:
+        "200":
+          description: Saloon updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Saloon updated successfully
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      summary: Delete saloon
+      tags: [Saloons]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Saloon deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Saloon deleted successfully
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /saloons/{id}/services:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Saloon ID
+    post:
+      summary: Add a service to a saloon
+      tags: [Saloons]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaloonService"
+      responses:
+        "201":
+          description: Service added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Service added successfully
+                      serviceId:
+                        type: integer
+                        example: 1
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    get:
+      summary: Get all services of a saloon
+      tags: [Saloons]
+      responses:
+        "200":
+          description: List of saloon services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      saloonId:
+                        type: integer
+                        example: 1
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SaloonService"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /saloons/{id}/availability:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Saloon ID
+    get:
+      summary: Get saloon's available time slots
+      tags: [Saloons]
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2025-05-10"
+          description: Date for checking availability (YYYY-MM-DD)
+        - name: service_id
+          in: query
+          schema:
+            type: integer
+          description: Specific service ID to check availability for
+      responses:
+        "200":
+          description: Available time slots for the salon
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      saloon_id:
+                        type: integer
+                        example: 1
+                      saloon_name:
+                        type: string
+                        example: "Elegant Cuts Salon"
+                      service_id:
+                        type: integer
+                        example: 2
+                        nullable: true
+                      service_name:
+                        type: string
+                        example: "Haircut"
+                        nullable: true
+                      date:
+                        type: string
+                        format: date
+                        example: "2025-05-10"
+                      available_slots:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            time:
+                              type: string
+                              format: date-time
+                              example: "2025-05-10T09:00:00.000Z"
+                            formatted_time:
+                              type: string
+                              example: "9:00 AM"
+                      business_hours:
+                        type: object
+                        properties:
+                          opening_time:
+                            type: string
+                            example: "9:00 AM"
+                          closing_time:
+                            type: string
+                            example: "5:00 PM"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # Appointment Routes
+  /appointments:
+    post:
+      summary: Book a new appointment
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointment"
+      responses:
+        "201":
+          description: Appointment booked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Appointment booked successfully
+                      appointmentId:
+                        type: integer
+                        example: 1
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    get:
+      summary: Get user's appointments
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of items per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, cancelled, completed]
+          description: Filter appointments by status
+      responses:
+        "200":
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      appointments:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Appointment"
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 10
+                          total:
+                            type: integer
+                            example: 15
+                          totalPages:
+                            type: integer
+                            example: 2
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /appointments/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Appointment ID
+    patch:
+      summary: Update appointment status
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentStatus"
+      responses:
+        "200":
+          description: Appointment status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Appointment status updated successfully
+                      appointmentId:
+                        type: integer
+                        example: 1
+                      status:
+                        type: string
+                        example: confirmed
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+# Components references
 components:
   schemas:
+    # User related schemas
     User:
       type: object
       properties:
@@ -459,7 +824,7 @@ components:
         email:
           type: string
           format: email
-          example: maleeshapramud2005@gmail.com
+          example: maleeshapramud9@gmail.com
         phone:
           type: string
           nullable: true
@@ -490,7 +855,7 @@ components:
         email:
           type: string
           format: email
-          example: maleeshapramud2005@gmail.com
+          example: maleeshapramud9@gmail.com
         password:
           type: string
           minLength: 6
@@ -533,7 +898,7 @@ components:
         email:
           type: string
           format: email
-          example: maleeshapramud2005@gmail.com
+          example: maleeshapramud9@gmail.com
         password:
           type: string
           example: Password123
@@ -550,7 +915,7 @@ components:
         email:
           type: string
           format: email
-          example: maleeshapramud2005@gmail.com
+          example: maleeshapramud9@gmail.com
         phone:
           type: string
           nullable: true
@@ -560,12 +925,250 @@ components:
           example: 2
           description: User role ID (1=admin, 2=owner, 3=guest)
 
+    # Saloon related schemas
+    Saloon:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Elegant Cuts Salon"
+        description:
+          type: string
+          example: "Premier hair salon with professional stylists"
+        address:
+          type: string
+          example: "123 Main St, City, Country"
+        phone:
+          type: string
+          example: "0701234567"
+        email:
+          type: string
+          format: email
+          example: "contact@elegantcuts.com"
+        website:
+          type: string
+          example: "https://elegantcuts.com"
+        opening_time:
+          type: string
+          example: "09:00"
+        closing_time:
+          type: string
+          example: "17:00"
+
+    SaloonWithServices:
+      allOf:
+        - $ref: "#/components/schemas/Saloon"
+        - type: object
+          properties:
+            services:
+              type: array
+              items:
+                $ref: "#/components/schemas/SaloonService"
+
+    SaloonService:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Haircut"
+        description:
+          type: string
+          example: "Professional haircut with styling"
+        price:
+          type: number
+          format: float
+          example: 50.00
+        duration:
+          type: integer
+          example: 60
+          description: Duration in minutes
+
+    CreateSaloon:
+      type: object
+      required:
+        - name
+        - address
+      properties:
+        name:
+          type: string
+          example: "Elegant Cuts Salon"
+        description:
+          type: string
+          example: "Premier hair salon with professional stylists"
+        address:
+          type: string
+          example: "123 Main St, City, Country"
+        phone:
+          type: string
+          example: "0701234567"
+        email:
+          type: string
+          format: email
+          example: "contact@elegantcuts.com"
+        website:
+          type: string
+          example: "https://elegantcuts.com"
+        opening_time:
+          type: string
+          example: "09:00"
+          description: "Opening time in 24-hour format (HH:MM)"
+        closing_time:
+          type: string
+          example: "17:00"
+          description: "Closing time in 24-hour format (HH:MM)"
+
+    CreateSaloonService:
+      type: object
+      required:
+        - name
+        - price
+      properties:
+        name:
+          type: string
+          example: "Haircut"
+        description:
+          type: string
+          example: "Professional haircut with styling"
+        price:
+          type: number
+          format: float
+          example: 50.00
+        duration:
+          type: integer
+          example: 60
+          description: Duration in minutes
+
+    UpdateSaloon:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          example: "Elegant Cuts Salon Rebranded"
+        description:
+          type: string
+          example: "Updated description for our premier hair salon"
+        address:
+          type: string
+          example: "456 New St, City, Country"
+        phone:
+          type: string
+          example: "0701234567"
+        email:
+          type: string
+          format: email
+          example: "contact@elegantcuts.com"
+        website:
+          type: string
+          example: "https://elegantcuts.com"
+        opening_time:
+          type: string
+          example: "08:00"
+          description: "Opening time in 24-hour format (HH:MM)"
+        closing_time:
+          type: string
+          example: "18:00"
+          description: "Closing time in 24-hour format (HH:MM)"
+
+    # Appointment related schemas
+    CreateAppointment:
+      type: object
+      required:
+        - saloon_id
+        - service_id
+        - appointment_date
+      properties:
+        saloon_id:
+          type: integer
+          example: 1
+        service_id:
+          type: integer
+          example: 2
+        appointment_date:
+          type: string
+          format: date-time
+          example: "2025-05-10T14:00:00Z"
+        notes:
+          type: string
+          example: "First time customer, prefer female stylist if possible"
+
+    UpdateAppointmentStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled, completed]
+          example: confirmed
+        notes:
+          type: string
+          example: "Appointment confirmed, see you then!"
+
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        guest_id:
+          type: integer
+          example: 3
+        saloon_id:
+          type: integer
+          example: 1
+        service_id:
+          type: integer
+          example: 2
+        appointment_date:
+          type: string
+          format: date-time
+          example: "2025-05-10T14:00:00Z"
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled, completed]
+          example: pending
+        notes:
+          type: string
+          example: "First time customer, prefer female stylist if possible"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        # Additional properties when fetched from API
+        guest_name:
+          type: string
+          example: "Jane Doe"
+        guest_email:
+          type: string
+          example: "jane.doe@example.com"
+        saloon_name:
+          type: string
+          example: "Elegant Cuts Salon"
+        service_name:
+          type: string
+          example: "Haircut"
+        service_price:
+          type: number
+          format: float
+          example: 50.00
+
+  # Security schemes
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
 
+  # Response references
   responses:
     NotFoundError:
       description: Resource not found
@@ -650,3 +1253,16 @@ components:
               message:
                 type: string
                 example: "Error fetching users"
+
+    LegacyResponse:
+      description: Response for deprecated endpoints
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: boolean
+                example: true
+              data:
+                type: object
