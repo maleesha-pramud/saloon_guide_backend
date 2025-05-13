@@ -11,6 +11,7 @@ const router = Router();
 // Authentication routes
 router.post('/auth/register', userController.registerUser);
 router.post('/auth/login', userController.login);
+router.post('/auth/google', userController.googleAuth);
 router.get('/auth/me', authenticate, userController.getCurrentUser);
 
 router.use('/users', userRoutes);

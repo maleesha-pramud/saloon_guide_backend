@@ -2,9 +2,10 @@ import { Request, Response } from 'express';
 import pool from '../config/db';
 import { RequestHandler } from 'express';
 import bcrypt from 'bcrypt';
-import { createUserSchema, updateUserSchema, loginSchema } from '../validations';
+import { createUserSchema, updateUserSchema, loginSchema, googleAuthSchema } from '../validations';
 import { generateToken } from '../services/token.service';
 import { sendLoginToken } from '../services/email.service';
+import { verifyGoogleToken } from '../services/oauth.service';
 import logger from '../utils/logger';
 import {
     asyncHandler,
@@ -306,6 +307,102 @@ export const deleteUser: RequestHandler = asyncHandler(async (req: Request, res:
 
     logger.info(`User with ID ${id} deleted successfully`);
     res.sendSuccess({ message: 'User deleted successfully' });
+});
+
+// New function to authenticate user with Google
+export const googleAuth: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+    // Validate request data
+    const { error } = googleAuthSchema.validate(req.body);
+    if (error) {
+        throw new ValidationError(error.details[0].message);
+    }
+
+    const { token, role } = req.body;
+
+    // Verify the Google token
+    const googleUser = await verifyGoogleToken(token);
+
+    if (!googleUser) {
+        throw new AuthenticationError('Invalid Google token');
+    }
+
+    logger.info(`Google auth for: ${googleUser.email}`);
+
+    try {
+        // Check if user already exists
+        const [existingUser]: any = await pool.query(
+            'SELECT id, name, email, role_id FROM users WHERE email = ?',
+            [googleUser.email]
+        );
+
+        let userId: number;
+        let userName: string;
+        let userRoleId: number;
+        let isNewUser = false;
+
+        if (existingUser && existingUser.length > 0) {
+            // User exists, use their data
+            userId = existingUser[0].id;
+            userName = existingUser[0].name;
+            userRoleId = existingUser[0].role_id;
+
+            logger.info(`Existing user logged in via Google: ${googleUser.email}`);
+        } else {
+            // Create new user
+            // Default role to 'guest' (role_id: 3) if not specified or to 'owner' (role_id: 2) if requested
+            const roleId = role === 'owner' ? 2 : 3;
+
+            // Generate a random secure password for Google users
+            const randomPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+            const hashedPassword = await bcrypt.hash(randomPassword, SALT_ROUNDS);
+
+            // Insert new user
+            const [result]: any = await pool.query(
+                'INSERT INTO users (name, email, password, role_id, google_id) VALUES (?, ?, ?, ?, ?)',
+                [googleUser.name, googleUser.email, hashedPassword, roleId, googleUser.googleId]
+            );
+
+            userId = result.insertId;
+            userName = googleUser.name;
+            userRoleId = roleId;
+            isNewUser = true;
+
+            logger.info(`New user created via Google: ${googleUser.email}, ID: ${userId}, role: ${roleId}`);
+        }
+
+        // Generate JWT token
+        const jwtToken = generateToken({
+            userId,
+            email: googleUser.email,
+            roleId: userRoleId
+        });
+
+        // Store the token in the database
+        await pool.query('UPDATE users SET token = ? WHERE id = ?', [jwtToken, userId]);
+
+        // Return appropriate response
+        res.status(isNewUser ? 201 : 200).json({
+            status: true,
+            data: {
+                message: isNewUser
+                    ? `${userRoleId === 2 ? 'Owner' : 'Guest'} registered successfully with Google`
+                    : 'Logged in successfully with Google',
+                token: jwtToken,
+                user: {
+                    id: userId,
+                    name: userName,
+                    email: googleUser.email,
+                    role_id: userRoleId,
+                    picture: googleUser.picture
+                },
+                isNewUser
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error during Google authentication:', error);
+        throw new DatabaseError('Failed to authenticate with Google');
+    }
 });
 
 // These functions are no longer needed but kept for backward compatibility

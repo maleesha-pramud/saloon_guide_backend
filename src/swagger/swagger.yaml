@@ -123,6 +123,95 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /auth/google:
+    post:
+      summary: Authenticate with Google
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleAuth"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Logged in successfully with Google"
+                      token:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      user:
+                        allOf:
+                          - $ref: "#/components/schemas/UserAuthenticated"
+                          - type: object
+                            properties:
+                              picture:
+                                type: string
+                                example: "https://lh3.googleusercontent.com/a/profile-picture..."
+                      isNewUser:
+                        type: boolean
+                        example: false
+        "201":
+          description: New user registered with Google
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Guest registered successfully with Google"
+                      token:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      user:
+                        allOf:
+                          - $ref: "#/components/schemas/UserAuthenticated"
+                          - type: object
+                            properties:
+                              picture:
+                                type: string
+                                example: "https://lh3.googleusercontent.com/a/profile-picture..."
+                      isNewUser:
+                        type: boolean
+                        example: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid Google token"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
   /auth/me:
     get:
       summary: Get current authenticated user profile
@@ -648,6 +737,35 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /saloons/owner/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Owner User ID
+    get:
+      summary: Get saloon by owner's user ID
+      tags: [Saloons]
+      responses:
+        "200":
+          description: Saloon details for the specified owner
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/SaloonWithServices"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
   # Appointment Routes
   /appointments:
     post:
@@ -925,6 +1043,21 @@ components:
           example: 2
           description: User role ID (1=admin, 2=owner, 3=guest)
 
+    GoogleAuth:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFiZDY4NWY1YTh..."
+        role:
+          type: string
+          enum: [owner, guest]
+          default: guest
+          example: guest
+          description: User role (owner or guest)
+
     # Saloon related schemas
     Saloon:
       type: object
@@ -957,6 +1090,9 @@ components:
         closing_time:
           type: string
           example: "17:00"
+        owner_id:
+          type: integer
+          example: 2
 
     SaloonWithServices:
       allOf:
@@ -967,6 +1103,12 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/SaloonService"
+            opening_time:
+              type: string
+              example: "09:00"
+            closing_time:
+              type: string
+              example: "17:00"
 
     SaloonService:
       type: object

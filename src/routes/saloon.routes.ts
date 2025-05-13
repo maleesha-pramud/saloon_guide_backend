@@ -7,6 +7,7 @@ const router = Router();
 // Saloon management routes
 router.post('', authenticate, authorizeOwner, saloonController.createSaloon);
 router.get('', saloonController.getAllSaloons);
+router.get('/owner/:userId', saloonController.getSaloonByOwnerId);
 router.get('/:id', saloonController.getSaloonById);
 router.get('/:id/services', saloonController.getSaloonServices);
 router.get('/:id/availability', saloonController.getSaloonAvailability);

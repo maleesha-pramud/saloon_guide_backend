@@ -146,7 +146,7 @@ export const getSaloonById: RequestHandler = asyncHandler(async (req: Request, r
     try {
         // Get saloon details
         const [saloon]: any = await pool.query(
-            'SELECT id, name, description, address, phone, email, website, owner_id FROM saloons WHERE id = ?',
+            'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time FROM saloons WHERE id = ?',
             [id]
         );
 
@@ -169,6 +169,48 @@ export const getSaloonById: RequestHandler = asyncHandler(async (req: Request, r
         res.sendSuccess(saloonData);
     } catch (error) {
         logger.error(`Error fetching salon with ID ${id}:`, error);
+
+        if (error instanceof NotFoundError) {
+            throw error;
+        }
+
+        throw new DatabaseError('Failed to fetch salon details');
+    }
+});
+
+/**
+ * Get a saloon by owner's user ID
+ */
+export const getSaloonByOwnerId: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+    const { userId } = req.params;
+    logger.info(`Fetching salon for owner with ID: ${userId}`);
+
+    try {
+        // Get saloon details by owner ID
+        const [saloon]: any = await pool.query(
+            'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time FROM saloons WHERE owner_id = ?',
+            [userId]
+        );
+
+        if (!saloon || saloon.length === 0) {
+            throw new NotFoundError(`No salon found for owner with ID ${userId}`);
+        }
+
+        // Get services for this saloon
+        const [services]: any = await pool.query(
+            'SELECT id, name, description, price, duration FROM saloon_services WHERE saloon_id = ?',
+            [saloon[0].id]
+        );
+
+        // Combine data
+        const saloonData = {
+            ...saloon[0],
+            services: services || []
+        };
+
+        res.sendSuccess(saloonData);
+    } catch (error) {
+        logger.error(`Error fetching salon for owner with ID ${userId}:`, error);
 
         if (error instanceof NotFoundError) {
             throw error;

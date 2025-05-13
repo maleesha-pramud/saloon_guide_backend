@@ -38,3 +38,9 @@ export const loginSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().required()
 });
+
+// Google auth validation schema
+export const googleAuthSchema = Joi.object({
+    token: Joi.string().required(),
+    role: Joi.string().valid('owner', 'guest').default('guest').optional()
+});
