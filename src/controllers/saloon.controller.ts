@@ -90,7 +90,7 @@ export const getAllSaloons: RequestHandler = asyncHandler(async (req: Request, r
 
     logger.info(`Fetching salons with pagination: page=${page}, limit=${limit}${search ? ', search=' + search : ''}`);
 
-    let query = 'SELECT id, name, description, address, phone, email, website FROM saloons';
+    let query = 'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time FROM saloons';
     const params = [];
 
     // Add search condition if search parameter is provided
