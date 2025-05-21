@@ -22,7 +22,29 @@ export const createSaloonSchema = Joi.object({
     closing_time: Joi.string()
         .pattern(timePattern)
         .message('Closing time must be in HH:MM format (24-hour)')
-        .default('17:00')
+        .default('17:00'),
+    latitude: Joi.number()
+        .precision(8)
+        .min(-90)
+        .max(90)
+        .required()
+        .messages({
+            'number.min': 'Latitude must be between -90 and 90',
+            'number.max': 'Latitude must be between -90 and 90',
+            'number.precision': 'Latitude can have at most 8 decimal places',
+            'any.required': 'Latitude is required'
+        }),
+    longitude: Joi.number()
+        .precision(8)
+        .min(-180)
+        .max(180)
+        .required()
+        .messages({
+            'number.min': 'Longitude must be between -180 and 180',
+            'number.max': 'Longitude must be between -180 and 180',
+            'number.precision': 'Longitude can have at most 8 decimal places',
+            'any.required': 'Longitude is required'
+        })
 }).custom((value, helpers) => {
     // Validate that closing time is after opening time
     if (value.opening_time && value.closing_time) {

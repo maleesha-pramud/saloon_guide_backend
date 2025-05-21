@@ -766,6 +766,50 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /saloons/nearby:
+    get:
+      summary: Get nearby saloons by location
+      tags: [Saloons]
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          schema:
+            type: number
+            format: float
+            example: 6.9271
+          description: Latitude of the user's location
+        - name: longitude
+          in: query
+          required: true
+          schema:
+            type: number
+            format: float
+            example: 79.8612
+          description: Longitude of the user's location
+      responses:
+        "200":
+          description: List of nearby saloons within 10km radius
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      saloons:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Saloon"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
   # Appointment Routes
   /appointments:
     post:
@@ -1136,6 +1180,8 @@ components:
       required:
         - name
         - address
+        - latitude
+        - longitude
       properties:
         name:
           type: string
@@ -1164,6 +1210,20 @@ components:
           type: string
           example: "17:00"
           description: "Closing time in 24-hour format (HH:MM)"
+        latitude:
+          type: number
+          format: float
+          minimum: -90
+          maximum: 90
+          example: 6.9271
+          description: "Geographic coordinate - latitude (required)"
+        longitude:
+          type: number
+          format: float
+          minimum: -180
+          maximum: 180
+          example: 79.8612
+          description: "Geographic coordinate - longitude (required)"
 
     CreateSaloonService:
       type: object
@@ -1173,18 +1233,26 @@ components:
       properties:
         name:
           type: string
+          minLength: 3
+          maxLength: 100
           example: "Haircut"
+          description: "Service name, must be at least 3 characters"
         description:
           type: string
+          maxLength: 500
           example: "Professional haircut with styling"
         price:
           type: number
           format: float
+          minimum: 0.01
           example: 50.00
+          description: "Service price, must be a positive number"
         duration:
           type: integer
+          minimum: 5
+          maximum: 480
           example: 60
-          description: Duration in minutes
+          description: "Duration in minutes, between 5 and 480 minutes"
 
     UpdateSaloon:
       type: object

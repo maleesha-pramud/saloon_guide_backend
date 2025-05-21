@@ -16,7 +16,7 @@ import {
  * Create a new saloon
  */
 export const createSaloon: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
-    const { name, description, address, phone, email, website, opening_time, closing_time } = req.body;
+    const { name, description, address, phone, email, website, opening_time, closing_time, latitude, longitude } = req.body;
 
     if (!req.user) {
         throw new AuthorizationError('Authentication required');
@@ -32,7 +32,7 @@ export const createSaloon: RequestHandler = asyncHandler(async (req: Request, re
 
     // Validate salon data
     const { error } = createSaloonSchema.validate({
-        name, description, address, phone, email, website, opening_time, closing_time
+        name, description, address, phone, email, website, opening_time, closing_time, latitude, longitude
     });
 
     if (error) {
@@ -55,8 +55,8 @@ export const createSaloon: RequestHandler = asyncHandler(async (req: Request, re
         const closingTime = closing_time || '17:00';
 
         const [result]: any = await pool.query(
-            'INSERT INTO saloons (name, description, address, phone, email, website, owner_id, opening_time, closing_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [name, description || null, address, phone || null, email || null, website || null, ownerId, openingTime, closingTime]
+            'INSERT INTO saloons (name, description, address, phone, email, website, owner_id, opening_time, closing_time, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, description || null, address, phone || null, email || null, website || null, ownerId, openingTime, closingTime, latitude || null, longitude || null]
         );
 
         logger.info(`Salon created successfully, ID: ${result.insertId}`);
@@ -90,7 +90,7 @@ export const getAllSaloons: RequestHandler = asyncHandler(async (req: Request, r
 
     logger.info(`Fetching salons with pagination: page=${page}, limit=${limit}${search ? ', search=' + search : ''}`);
 
-    let query = 'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time FROM saloons';
+    let query = 'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time, latitude, longitude FROM saloons';
     const params = [];
 
     // Add search condition if search parameter is provided
@@ -146,7 +146,7 @@ export const getSaloonById: RequestHandler = asyncHandler(async (req: Request, r
     try {
         // Get saloon details
         const [saloon]: any = await pool.query(
-            'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time FROM saloons WHERE id = ?',
+            'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time, latitude, longitude FROM saloons WHERE id = ?',
             [id]
         );
 
@@ -188,12 +188,12 @@ export const getSaloonByOwnerId: RequestHandler = asyncHandler(async (req: Reque
     try {
         // Get saloon details by owner ID
         const [saloon]: any = await pool.query(
-            'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time FROM saloons WHERE owner_id = ?',
+            'SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time, latitude, longitude FROM saloons WHERE owner_id = ?',
             [userId]
         );
 
         if (!saloon || saloon.length === 0) {
-            throw new NotFoundError(`No salon found for owner with ID ${userId}`);
+            throw new NotFoundError(`No salon found for owner`);
         }
 
         // Get services for this saloon
@@ -233,7 +233,14 @@ export const addServiceToSaloon: RequestHandler = asyncHandler(async (req: Reque
 
     logger.info(`Adding service to salon ID: ${id}`);
 
-    // TODO: Add validation for the service data
+    // Validate the service data
+    const { error } = createSaloonServiceSchema.validate({
+        name, description, price, duration
+    });
+
+    if (error) {
+        throw new ValidationError(error.details[0].message);
+    }
 
     try {
         // Check if salon exists
@@ -531,7 +538,7 @@ function isSameDay(date1: Date, date2: Date): boolean {
  */
 export const updateSaloon: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, description, address, phone, email, website, opening_time, closing_time } = req.body;
+    const { name, description, address, phone, email, website, opening_time, closing_time, latitude, longitude } = req.body;
 
     if (!req.user) {
         throw new AuthorizationError('Authentication required');
@@ -623,6 +630,16 @@ export const updateSaloon: RequestHandler = asyncHandler(async (req: Request, re
             updateValues.push(closing_time);
         }
 
+        if (latitude !== undefined) {
+            updateQuery += 'latitude = ?, ';
+            updateValues.push(latitude || null);
+        }
+
+        if (longitude !== undefined) {
+            updateQuery += 'longitude = ?, ';
+            updateValues.push(longitude || null);
+        }
+
         // Check if there are any fields to update
         if (updateValues.length === 0) {
             throw new ValidationError('At least one field must be provided for update');
@@ -706,5 +723,51 @@ export const deleteSaloon: RequestHandler = asyncHandler(async (req: Request, re
         }
 
         throw new DatabaseError('Failed to delete salon');
+    }
+});
+
+/**
+ * Get nearby saloons based on latitude and longitude (within 10km radius)
+ */
+export const getNearbySaloons: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+    const { latitude, longitude } = req.query;
+
+    if (!latitude || !longitude) {
+        throw new ValidationError('latitude and longitude are required');
+    }
+
+    const lat = parseFloat(latitude as string);
+    const lng = parseFloat(longitude as string);
+
+    if (isNaN(lat) || isNaN(lng)) {
+        throw new ValidationError('latitude and longitude must be valid numbers');
+    }
+
+    // 10km radius
+    const radius = 10;
+
+    // Haversine formula in SQL (distance in km)
+    const query = `
+        SELECT id, name, description, address, phone, email, website, owner_id, opening_time, closing_time, latitude, longitude,
+            (6371 * acos(
+                cos(radians(?)) * cos(radians(latitude)) *
+                cos(radians(longitude) - radians(?)) +
+                sin(radians(?)) * sin(radians(latitude))
+            )) AS distance
+        FROM saloons
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+        HAVING distance <= ?
+        ORDER BY distance ASC
+        LIMIT 50
+    `;
+
+    try {
+        const [rows]: any = await pool.query(query, [lat, lng, lat, radius]);
+        res.sendSuccess({
+            saloons: rows
+        });
+    } catch (error) {
+        logger.error('Error fetching nearby saloons:', error);
+        throw new DatabaseError('Failed to fetch nearby saloons');
     }
 });

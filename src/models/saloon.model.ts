@@ -1,27 +1,29 @@
 export interface Saloon {
-    id?: number;
-    name: string;
-    description?: string;
-    address: string;
-    phone?: string;
-    email?: string;
-    website?: string;
-    owner_id: number;
-    opening_time?: string; // Format: HH:MM (24-hour)
-    closing_time?: string; // Format: HH:MM (24-hour)
-    created_at?: Date;
-    updated_at?: Date;
+  id?: number;
+  name: string;
+  description?: string;
+  address: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  owner_id: number;
+  opening_time?: string; // Format: HH:MM (24-hour)
+  closing_time?: string; // Format: HH:MM (24-hour)
+  latitude?: number;     // Geographic coordinate - latitude
+  longitude?: number;    // Geographic coordinate - longitude
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export interface SaloonService {
-    id?: number;
-    saloon_id: number;
-    name: string;
-    description?: string;
-    price: number;
-    duration?: number; // in minutes
-    created_at?: Date;
-    updated_at?: Date;
+  id?: number;
+  saloon_id: number;
+  name: string;
+  description?: string;
+  price: number;
+  duration?: number; // in minutes
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export const saloonTableQuery = `
@@ -36,6 +38,8 @@ CREATE TABLE IF NOT EXISTS saloons (
   owner_id INT NOT NULL,
   opening_time TIME DEFAULT '09:00:00',
   closing_time TIME DEFAULT '17:00:00',
+  latitude DECIMAL(10,8),
+  longitude DECIMAL(11,8),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
