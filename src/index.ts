@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import routes from './routes';
-import pool from './config/db';
+import pool, { testConnection } from './config/db';
 import { userTableQuery } from './models/user.model';
 import { userRoleTableQuery, insertDefaultRolesQuery } from './models/userRole.model';
 import { saloonTableQuery, saloonServiceTableQuery } from './models/saloon.model';
@@ -12,9 +12,19 @@ import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import path from 'path';
 import logger from './utils/logger';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
+
+// Check for required environment variables
+const requiredEnvVars = ['JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+    logger.warn(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+    logger.warn('Please check your .env file or set these environment variables.');
+}
 
 // Initialize Express
 const app = express();
@@ -25,7 +35,7 @@ let swaggerPath;
 try {
     // Try to load from the current directory (for development)
     swaggerPath = path.join(__dirname, './swagger/swagger.yaml');
-    if (!require('fs').existsSync(swaggerPath)) {
+    if (!fs.existsSync(swaggerPath)) {
         // Try to load from parent directory (for production build)
         swaggerPath = path.join(__dirname, '../src/swagger/swagger.yaml');
     }
@@ -52,6 +62,12 @@ app.use((req, res, next) => {
 // Initialize database tables
 const initializeDatabase = async () => {
     try {
+        // Test database connection with retries
+        const isConnected = await testConnection();
+        if (!isConnected) {
+            throw new Error('Failed to connect to database after multiple attempts');
+        }
+
         // Create user roles table first since users table references it
         await pool.query(userRoleTableQuery);
         // Insert default roles
@@ -67,7 +83,7 @@ const initializeDatabase = async () => {
         logger.info('Database tables initialized successfully');
     } catch (error) {
         logger.error('Error initializing database tables:', error);
-        process.exit(1);
+        logger.error('Application will start without database initialization. Some features may not work.');
     }
 };
 
@@ -87,7 +103,11 @@ app.use(errorHandler);
 
 // Start server
 const startServer = async () => {
-    await initializeDatabase();
+    try {
+        await initializeDatabase();
+    } catch (error) {
+        logger.error('Database initialization failed, but server will continue to start:', error);
+    }
 
     app.listen(PORT, () => {
         logger.info(`Server running on port: http://localhost:${PORT}`);

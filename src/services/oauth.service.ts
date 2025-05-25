@@ -6,11 +6,13 @@ dotenv.config();
 
 const clientId = process.env.GOOGLE_CLIENT_ID;
 if (!clientId) {
-    logger.error('GOOGLE_CLIENT_ID is not set in environment variables');
+    logger.warn('GOOGLE_CLIENT_ID is not set in environment variables. OAuth authentication will not work properly.');
 }
 
-// Create a Google OAuth client
-const client = new OAuth2Client(clientId);
+// Create a Google OAuth client with fallback for development
+const client = new OAuth2Client(
+    clientId || 'dummy-client-id-for-development'
+);
 
 export interface GoogleUserInfo {
     email: string;
@@ -26,12 +28,18 @@ export interface GoogleUserInfo {
  */
 export const verifyGoogleToken = async (token: string): Promise<GoogleUserInfo | null> => {
     try {
+        // Fail fast if no client ID is configured
+        if (!clientId) {
+            logger.error('Cannot verify Google token: GOOGLE_CLIENT_ID is not configured');
+            return null;
+        }
+
         logger.info('Verifying Google ID token');
 
         // Verify the token against Google's API
         const ticket = await client.verifyIdToken({
             idToken: token,
-            audience: process.env.GOOGLE_CLIENT_ID
+            audience: clientId
         });
 
         // Get the payload from the ticket
