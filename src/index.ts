@@ -21,7 +21,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Load Swagger document
-const swaggerDocument = YAML.load(path.join(__dirname, './swagger/swagger.yaml'));
+let swaggerPath;
+try {
+    // Try to load from the current directory (for development)
+    swaggerPath = path.join(__dirname, './swagger/swagger.yaml');
+    if (!require('fs').existsSync(swaggerPath)) {
+        // Try to load from parent directory (for production build)
+        swaggerPath = path.join(__dirname, '../src/swagger/swagger.yaml');
+    }
+    logger.info(`Loading Swagger document from ${swaggerPath}`);
+    const swaggerDocument = YAML.load(swaggerPath);
+
+    // Swagger UI
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+} catch (error) {
+    logger.error(`Failed to load Swagger document: ${error}`);
+}
 
 // Middleware
 app.use(express.json());
@@ -33,9 +48,6 @@ app.use((req, res, next) => {
     logger.info(`${req.method} ${req.url}`);
     next();
 });
-
-// Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Initialize database tables
 const initializeDatabase = async () => {

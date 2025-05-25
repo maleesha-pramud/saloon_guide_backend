@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "npm run build && node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "build": "tsc && npm run copy-swagger",
+    "copy-swagger": "node -e \"require('fs-extra').copySync('src/swagger', 'dist/swagger')\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -17,6 +18,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "google-auth-library": "^9.15.1",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.0",
@@ -28,6 +30,7 @@
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^5.0.1",
+    "@types/fs-extra": "^11.0.4",
     "@types/joi": "^17.2.2",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/mysql": "^2.15.24",
@@ -36,6 +39,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/winston": "^2.4.4",
     "@types/yamljs": "^0.2.34",
+    "fs-extra": "^11.3.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
