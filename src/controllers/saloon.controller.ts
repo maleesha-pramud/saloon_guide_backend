@@ -763,9 +763,7 @@ export const getNearbySaloons: RequestHandler = asyncHandler(async (req: Request
 
     try {
         const [rows]: any = await pool.query(query, [lat, lng, lat, radius]);
-        res.sendSuccess({
-            saloons: rows
-        });
+        res.sendSuccess(rows);
     } catch (error) {
         logger.error('Error fetching nearby saloons:', error);
         throw new DatabaseError('Failed to fetch nearby saloons');
