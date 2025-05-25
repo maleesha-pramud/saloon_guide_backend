@@ -18,7 +18,7 @@ import fs from 'fs';
 dotenv.config();
 
 // Check for required environment variables
-const requiredEnvVars = ['JWT_SECRET'];
+const requiredEnvVars = ['PORT', 'DB_HOST', 'DB_USER', 'DB_PASS', 'DB_NAME', 'DB_PORT', 'JWT_EXPIRES_IN', 'JWT_SECRET', 'EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_SECURE', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM', 'EMAIL_FROM_NAME', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
@@ -26,9 +26,11 @@ if (missingEnvVars.length > 0) {
     logger.warn('Please check your .env file or set these environment variables.');
 }
 
-// Initialize Express
+// Initialize Express and CORS
 const app = express();
+const cors = require('cors');
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || 'http://localhost';
 
 // Load Swagger document
 let swaggerPath;
@@ -51,7 +53,7 @@ try {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(responseHandler); // Add response handler middleware
+app.use(responseHandler);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -87,6 +89,13 @@ const initializeDatabase = async () => {
     }
 };
 
+// Configure CORS before your routes
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 // API Routes
 app.use('/api/v1', routes);
 
@@ -110,8 +119,11 @@ const startServer = async () => {
     }
 
     app.listen(PORT, () => {
-        logger.info(`Server running on port: http://localhost:${PORT}`);
-        logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
+        const env = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+        const baseUrl = env === 'production' ? HOST : `${HOST}:${PORT}`;
+        logger.info(`Running in ${env} mode`);
+        logger.info(`Server running on: ${baseUrl}`);
+        logger.info(`API Documentation: ${baseUrl}/api-docs`);
     });
 };
 
