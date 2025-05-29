@@ -5,7 +5,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://20.211.144.126/api/v1
+  - url: http://localhost:3000/api/v1
     description: Development server
 
 tags:
