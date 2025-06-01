@@ -238,6 +238,43 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /auth/check:
+    get:
+      summary: Check authentication status and return user details with role information
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Authentication check successful with user details and role information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        allOf:
+                          - $ref: "#/components/schemas/User"
+                          - type: object
+                      isAuthenticated:
+                        type: boolean
+                        example: true
+                      tokenValid:
+                        type: boolean
+                        example: true
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
   # User Management Routes
   /users:
     get:

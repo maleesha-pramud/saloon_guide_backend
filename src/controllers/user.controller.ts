@@ -227,6 +227,43 @@ export const getCurrentUser: RequestHandler = asyncHandler(async (req: Request, 
     res.sendSuccess(rows[0]);
 });
 
+// New function to check authentication and return user details
+export const checkAuth: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw new AuthenticationError('No token provided or invalid format');
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    logger.info('Auth check with token from header');
+
+    // Find user by token in database
+    const [rows]: any = await pool.query(
+        `SELECT u.id, u.name, u.email, u.phone, u.role_id, u.token, u.created_at, u.updated_at FROM users u WHERE u.token = ?`,
+        [token]
+    );
+
+    if (!rows || rows.length === 0) {
+        throw new AuthenticationError('Invalid or expired token');
+    }
+
+    const user = rows[0];
+
+    res.sendSuccess({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role_id: user.role_id,
+        token: user.token,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        isAuthenticated: true,
+        tokenValid: true
+    });
+});
+
 // Keep these existing functions
 export const login: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body;

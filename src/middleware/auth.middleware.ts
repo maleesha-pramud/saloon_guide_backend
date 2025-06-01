@@ -17,23 +17,34 @@ declare global {
 /**
  * Authentication middleware to verify JWT tokens
  */
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
+    // Get the auth header
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({
+            status: false,
+            message: 'Unauthorized - No token provided',
+            error: 'NO_TOKEN'
+        });
+        return;
+    }
+
+    // Extract token from header
+    const token = authHeader.split(' ')[1];
+
     try {
-        // Get the auth header
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.sendError('Unauthorized - No token provided', 401);
-        }
-
-        // Extract token from header
-        const token = authHeader.split(' ')[1];
-
         // Verify the token
         const decoded = verifyToken(token);
 
+        // Check if token is valid
         if (!decoded) {
-            return res.sendError('Unauthorized - Invalid token', 401);
+            res.status(401).json({
+                status: false,
+                message: 'Unauthorized - Invalid token',
+                error: 'INVALID_TOKEN'
+            });
+            return;
         }
 
         // Attach user data to request
@@ -46,7 +57,11 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
         next();
     } catch (error) {
         console.error('Authentication error:', error);
-        return res.sendError('Unauthorized - Authentication failed', 401);
+        res.status(401).json({
+            status: false,
+            message: 'Unauthorized - Invalid or expired token',
+            error: 'INVALID_TOKEN'
+        });
     }
 };
 

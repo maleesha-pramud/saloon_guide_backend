@@ -13,6 +13,7 @@ router.post('/auth/register', userController.registerUser);
 router.post('/auth/login', userController.login);
 router.post('/auth/google', userController.googleAuth);
 router.get('/auth/me', authenticate, userController.getCurrentUser);
+router.get('/auth/check', authenticate, userController.checkAuth);
 
 router.use('/users', userRoutes);
 router.use('/saloons', saloonRoutes);
