@@ -17,7 +17,7 @@ import { AppointmentStatus } from '../models/appointment.model';
  * Book a new appointment (for guests)
  */
 export const bookAppointment: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
-    const { saloon_id, service_id, appointment_date, notes } = req.body;
+    const { saloon_id, service_ids, appointment_date, notes } = req.body;
 
     if (!req.user) {
         throw new AuthorizationError('Authentication required');
@@ -29,12 +29,12 @@ export const bookAppointment: RequestHandler = asyncHandler(async (req: Request,
     }
 
     const guestId = req.user.userId;
-    logger.info(`Creating new appointment for guest ID: ${guestId}, salon ID: ${saloon_id}`);
+    logger.info(`Creating new appointment for guest ID: ${guestId}, salon ID: ${saloon_id}, services: [${service_ids.join(', ')}]`);
 
     // Validate request data
     const { error } = createAppointmentSchema.validate({
         saloon_id,
-        service_id,
+        service_ids,
         appointment_date,
         notes
     });
@@ -51,38 +51,92 @@ export const bookAppointment: RequestHandler = asyncHandler(async (req: Request,
             throw new NotFoundError(`Salon with ID ${saloon_id} not found`);
         }
 
-        // Check if service exists and belongs to the salon
-        const [service]: any = await pool.query(
-            'SELECT id FROM saloon_services WHERE id = ? AND saloon_id = ?',
-            [service_id, saloon_id]
+        // Check if all services exist and belong to the salon
+        const placeholders = service_ids.map(() => '?').join(',');
+        const [services]: any = await pool.query(
+            `SELECT id FROM saloon_services WHERE id IN (${placeholders}) AND saloon_id = ?`,
+            [...service_ids, saloon_id]
         );
 
-        if (!service || service.length === 0) {
-            throw new NotFoundError(`Service with ID ${service_id} not found in this salon`);
+        if (!services || services.length !== service_ids.length) {
+            const foundServiceIds = services.map((s: any) => s.id);
+            const missingServiceIds = service_ids.filter((id: number) => !foundServiceIds.includes(id));
+            throw new NotFoundError(`Services with IDs [${missingServiceIds.join(', ')}] not found in this salon`);
         }
 
-        // Book the appointment
-        const [result]: any = await pool.query(
-            `INSERT INTO appointments 
-       (guest_id, saloon_id, service_id, appointment_date, status, notes) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-            [guestId, saloon_id, service_id, new Date(appointment_date), AppointmentStatus.PENDING, notes || null]
-        );
+        // Start transaction to ensure data consistency
+        await pool.query('START TRANSACTION'); try {
+            // Create the appointment
+            const [result]: any = await pool.query(
+                `INSERT INTO appointments 
+           (guest_id, saloon_id, appointment_date, status, notes) 
+           VALUES (?, ?, ?, ?, ?)`,
+                [guestId, saloon_id, new Date(appointment_date), AppointmentStatus.PENDING, notes || null]
+            );
 
-        logger.info(`Appointment booked successfully, ID: ${result.insertId}`);
+            const appointmentId = result.insertId;            // Insert services for the appointment using a single bulk insert query
+            if (service_ids.length > 0) {
+                const placeholders = service_ids.map(() => '(?, ?)').join(', ');
+                const values = service_ids.flatMap((serviceId: number) => [appointmentId, serviceId]);
 
-        res.status(201).json({
-            status: true,
-            data: {
-                message: 'Appointment booked successfully',
-                appointmentId: result.insertId
+                logger.info(`Inserting ${service_ids.length} services for appointment ${appointmentId}`);
+                await pool.query(
+                    `INSERT INTO appointment_services (appointment_id, service_id) VALUES ${placeholders}`,
+                    values
+                );
+                logger.info(`Successfully inserted services for appointment ${appointmentId}`);
             }
-        });
-    } catch (error) {
-        logger.error('Error booking appointment:', error);
 
-        if (error instanceof NotFoundError) {
+            // Commit transaction
+            await pool.query('COMMIT');
+
+            logger.info(`Appointment booked successfully, ID: ${appointmentId}`);
+
+            res.status(201).json({
+                status: true,
+                data: {
+                    message: 'Appointment booked successfully',
+                    appointmentId: appointmentId,
+                    service_ids: service_ids
+                }
+            });
+        } catch (transactionError: any) {
+            // Rollback transaction on error
+            try {
+                await pool.query('ROLLBACK');
+                logger.info('Transaction rolled back successfully');
+            } catch (rollbackError) {
+                logger.error('Error during rollback:', rollbackError);
+            }
+
+            logger.error('Transaction error during appointment booking:', {
+                error: transactionError.message,
+                code: transactionError.code,
+                errno: transactionError.errno,
+                appointmentData: { saloon_id, service_ids, appointment_date }
+            });
+            throw transactionError;
+        }
+    } catch (error: any) {
+        logger.error('Error booking appointment:', {
+            message: error.message,
+            code: error.code,
+            appointmentData: { saloon_id, service_ids, appointment_date }
+        });
+
+        if (error instanceof NotFoundError ||
+            error instanceof ValidationError ||
+            error instanceof ConflictError) {
             throw error;
+        }
+
+        // Handle specific database errors
+        if (error.code === 'ER_LOCK_WAIT_TIMEOUT') {
+            throw new DatabaseError('Database is busy, please try again in a moment');
+        }
+
+        if (error.code === 'ER_DUP_ENTRY') {
+            throw new ConflictError('Appointment with these services already exists');
         }
 
         throw new DatabaseError('Failed to book appointment');
@@ -120,13 +174,10 @@ export const getUserAppointments: RequestHandler = asyncHandler(async (req: Requ
             query = `
         SELECT a.*, 
                u.name as guest_name, 
-               u.email as guest_email,
-               ss.name as service_name, 
-               ss.price as service_price
+               u.email as guest_email
         FROM appointments a
         JOIN saloons s ON a.saloon_id = s.id
         JOIN users u ON a.guest_id = u.id
-        JOIN saloon_services ss ON a.service_id = ss.id
         WHERE s.owner_id = ?
       `;
 
@@ -143,12 +194,9 @@ export const getUserAppointments: RequestHandler = asyncHandler(async (req: Requ
             query = `
         SELECT a.*,
                s.name as saloon_name,
-               s.address as saloon_address,
-               ss.name as service_name,
-               ss.price as service_price
+               s.address as saloon_address
         FROM appointments a
         JOIN saloons s ON a.saloon_id = s.id
-        JOIN saloon_services ss ON a.service_id = ss.id
         WHERE a.guest_id = ?
       `;
 
@@ -173,7 +221,25 @@ export const getUserAppointments: RequestHandler = asyncHandler(async (req: Requ
         queryParams.push(limit, offset);
 
         // Execute queries
-        const [appointments] = await pool.query(query, queryParams);
+        const [appointments]: any = await pool.query(query, queryParams);
+
+        // Get services for each appointment
+        const appointmentsWithServices = await Promise.all(
+            appointments.map(async (appointment: any) => {
+                const [services]: any = await pool.query(
+                    `SELECT ss.id, ss.name, ss.description, ss.price, ss.duration 
+                     FROM appointment_services as_rel
+                     JOIN saloon_services ss ON as_rel.service_id = ss.id
+                     WHERE as_rel.appointment_id = ?`,
+                    [appointment.id]
+                );
+
+                return {
+                    ...appointment,
+                    services: services || []
+                };
+            })
+        );
 
         // Get total count with the same filters (excluding limit and offset)
         const [countResult]: any = await pool.query(
@@ -185,7 +251,7 @@ export const getUserAppointments: RequestHandler = asyncHandler(async (req: Requ
         const totalPages = Math.ceil(total / limit);
 
         res.sendSuccess({
-            appointments,
+            appointments: appointmentsWithServices,
             pagination: {
                 page,
                 limit,

@@ -4,7 +4,7 @@ import { AppointmentStatus } from '../../models/appointment.model';
 // Appointment creation validation schema
 export const createAppointmentSchema = Joi.object({
     saloon_id: Joi.number().integer().positive().required(),
-    service_id: Joi.number().integer().positive().required(),
+    service_ids: Joi.array().items(Joi.number().integer().positive()).min(1).required(),
     appointment_date: Joi.date().iso().greater('now').required(),
     notes: Joi.string().allow(null, '').max(500).optional()
 });

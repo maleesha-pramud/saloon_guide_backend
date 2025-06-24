@@ -5,7 +5,7 @@ import pool, { testConnection } from './config/db';
 import { userTableQuery } from './models/user.model';
 import { userRoleTableQuery, insertDefaultRolesQuery } from './models/userRole.model';
 import { saloonTableQuery, saloonServiceTableQuery } from './models/saloon.model';
-import { appointmentTableQuery } from './models/appointment.model';
+import { appointmentTableQuery, appointmentServicesTableQuery } from './models/appointment.model';
 import { responseHandler } from './utils/responseHandler';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.middleware';
 import swaggerUi from 'swagger-ui-express';
@@ -78,9 +78,10 @@ const initializeDatabase = async () => {
         await pool.query(userTableQuery);
         // Create saloon tables
         await pool.query(saloonTableQuery);
-        await pool.query(saloonServiceTableQuery);
-        // Create appointments table
+        await pool.query(saloonServiceTableQuery);        // Create appointments table
         await pool.query(appointmentTableQuery);
+        // Create appointment services relationship table
+        await pool.query(appointmentServicesTableQuery);
 
         logger.info('Database tables initialized successfully');
     } catch (error) {

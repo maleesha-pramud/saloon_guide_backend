@@ -1457,15 +1457,19 @@ components:
       type: object
       required:
         - saloon_id
-        - service_id
+        - service_ids
         - appointment_date
       properties:
         saloon_id:
           type: integer
           example: 1
-        service_id:
-          type: integer
-          example: 2
+        service_ids:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          example: [2, 3]
+          description: "Array of service IDs to book. Must contain at least one service ID."
         appointment_date:
           type: string
           format: date-time
@@ -1499,9 +1503,6 @@ components:
         saloon_id:
           type: integer
           example: 1
-        service_id:
-          type: integer
-          example: 2
         appointment_date:
           type: string
           format: date-time
@@ -1529,13 +1530,28 @@ components:
         saloon_name:
           type: string
           example: "Elegant Cuts Salon"
-        service_name:
-          type: string
-          example: "Haircut"
-        service_price:
-          type: number
-          format: float
-          example: 50.00
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 2
+              name:
+                type: string
+                example: "Haircut"
+              description:
+                type: string
+                example: "Professional haircut with styling"
+              price:
+                type: number
+                format: float
+                example: 50.00
+              duration:
+                type: integer
+                example: 60
+          description: "Array of services associated with this appointment"
 
   # Security schemes
   securitySchemes:
