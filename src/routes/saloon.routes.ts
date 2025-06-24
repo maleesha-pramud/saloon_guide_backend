@@ -13,6 +13,8 @@ router.get('/:id', saloonController.getSaloonById);
 router.get('/:id/services', saloonController.getSaloonServices);
 router.get('/:id/availability', saloonController.getSaloonAvailability);
 router.post('/:id/services', authenticate, authorizeOwner, saloonController.addServiceToSaloon);
+router.put('/:id/services/:serviceId', authenticate, authorizeOwner, saloonController.updateSaloonService);
+router.delete('/:id/services/:serviceId', authenticate, authorizeOwner, saloonController.deleteSaloonService);
 router.put('/:id', authenticate, authorizeOwner, saloonController.updateSaloon);
 router.delete('/:id', authenticate, authorizeOwner, saloonController.deleteSaloon);
 

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { RequestHandler } from 'express';
 import pool from '../config/db';
 import logger from '../utils/logger';
-import { createSaloonSchema, createSaloonServiceSchema } from '../validations';
+import { createSaloonSchema, createSaloonServiceSchema, updateSaloonServiceSchema } from '../validations';
 import {
     asyncHandler,
     NotFoundError,
@@ -767,5 +767,182 @@ export const getNearbySaloons: RequestHandler = asyncHandler(async (req: Request
     } catch (error) {
         logger.error('Error fetching nearby saloons:', error);
         throw new DatabaseError('Failed to fetch nearby saloons');
+    }
+});
+
+/**
+ * Update a service in a saloon
+ */
+export const updateSaloonService: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+    const { id, serviceId } = req.params;
+    const { name, description, price, duration } = req.body;
+
+    if (!req.user) {
+        throw new AuthorizationError('Authentication required');
+    }
+
+    logger.info(`Updating service ID: ${serviceId} in salon ID: ${id}`);
+
+    // Validate the service data
+    const { error } = updateSaloonServiceSchema.validate({
+        name, description, price, duration
+    });
+
+    if (error) {
+        throw new ValidationError(error.details[0].message);
+    }
+
+    try {
+        // Check if salon exists and user owns it
+        const [saloon]: any = await pool.query(
+            'SELECT owner_id FROM saloons WHERE id = ?',
+            [id]
+        );
+
+        if (!saloon || saloon.length === 0) {
+            throw new NotFoundError(`Salon with ID ${id} not found`);
+        }
+
+        // Check if user is the owner of this salon
+        if (saloon[0].owner_id !== req.user.userId) {
+            throw new AuthorizationError('You can only update services in your own salon');
+        }
+
+        // Check if service exists and belongs to this salon
+        const [service]: any = await pool.query(
+            'SELECT id FROM saloon_services WHERE id = ? AND saloon_id = ?',
+            [serviceId, id]
+        );
+
+        if (!service || service.length === 0) {
+            throw new NotFoundError(`Service with ID ${serviceId} not found in this salon`);
+        }
+
+        // Build dynamic update query
+        let updateQuery = 'UPDATE saloon_services SET ';
+        const updateValues = [];
+
+        if (name) {
+            updateQuery += 'name = ?, ';
+            updateValues.push(name);
+        }
+
+        if (description !== undefined) {
+            updateQuery += 'description = ?, ';
+            updateValues.push(description || null);
+        }
+
+        if (price !== undefined) {
+            updateQuery += 'price = ?, ';
+            updateValues.push(price);
+        }
+
+        if (duration !== undefined) {
+            updateQuery += 'duration = ?, ';
+            updateValues.push(duration || null);
+        }
+
+        // Remove trailing comma and space
+        updateQuery = updateQuery.slice(0, -2);
+
+        // Add WHERE clause
+        updateQuery += ' WHERE id = ? AND saloon_id = ?';
+        updateValues.push(serviceId, id);
+
+        const [result]: any = await pool.query(updateQuery, updateValues);
+
+        if (result.affectedRows > 0) {
+            logger.info(`Service ID: ${serviceId} updated successfully in salon ID: ${id}`);
+            res.sendSuccess({
+                message: 'Service updated successfully',
+                serviceId: parseInt(serviceId)
+            });
+        } else {
+            throw new DatabaseError('Failed to update service');
+        }
+    } catch (error) {
+        logger.error(`Error updating service ID ${serviceId} in salon ID ${id}:`, error);
+
+        if (error instanceof NotFoundError || error instanceof AuthorizationError || error instanceof ValidationError) {
+            throw error;
+        }
+
+        throw new DatabaseError('Failed to update service');
+    }
+});
+
+/**
+ * Delete a service from a saloon
+ */
+export const deleteSaloonService: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+    const { id, serviceId } = req.params;
+
+    if (!req.user) {
+        throw new AuthorizationError('Authentication required');
+    }
+
+    logger.info(`Deleting service ID: ${serviceId} from salon ID: ${id}`);
+
+    try {
+        // Check if salon exists and user owns it
+        const [saloon]: any = await pool.query(
+            'SELECT owner_id FROM saloons WHERE id = ?',
+            [id]
+        );
+
+        if (!saloon || saloon.length === 0) {
+            throw new NotFoundError(`Salon with ID ${id} not found`);
+        }
+
+        // Check if user is the owner of this salon
+        if (saloon[0].owner_id !== req.user.userId) {
+            throw new AuthorizationError('You can only delete services from your own salon');
+        }
+
+        // Check if service exists and belongs to this salon
+        const [service]: any = await pool.query(
+            'SELECT id FROM saloon_services WHERE id = ? AND saloon_id = ?',
+            [serviceId, id]
+        );
+
+        if (!service || service.length === 0) {
+            throw new NotFoundError(`Service with ID ${serviceId} not found in this salon`);
+        }
+
+        // Check if there are any pending or confirmed appointments for this service
+        const [appointments]: any = await pool.query(
+            'SELECT COUNT(*) as count FROM appointments WHERE service_id = ? AND status IN (?, ?)',
+            [serviceId, 'pending', 'confirmed']
+        );
+
+        if (appointments[0].count > 0) {
+            throw new ConflictError('Cannot delete service with pending or confirmed appointments');
+        }
+
+        // Delete the service
+        const [result]: any = await pool.query(
+            'DELETE FROM saloon_services WHERE id = ? AND saloon_id = ?',
+            [serviceId, id]
+        );
+
+        if (result.affectedRows > 0) {
+            logger.info(`Service ID: ${serviceId} deleted successfully from salon ID: ${id}`);
+            res.sendSuccess({
+                message: 'Service deleted successfully',
+                serviceId: parseInt(serviceId)
+            });
+        } else {
+            throw new DatabaseError('Failed to delete service');
+        }
+    } catch (error) {
+        logger.error(`Error deleting service ID ${serviceId} from salon ID ${id}:`, error);
+
+        if (error instanceof NotFoundError ||
+            error instanceof AuthorizationError ||
+            error instanceof ConflictError) {
+            throw error;
+        }
+
+        throw new DatabaseError('Failed to delete service');
     }
 });

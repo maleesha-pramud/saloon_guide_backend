@@ -69,3 +69,11 @@ export const createSaloonServiceSchema = Joi.object({
     price: Joi.number().required().positive(),
     duration: Joi.number().integer().min(5).allow(null).optional()
 });
+
+// Saloon service update validation schema
+export const updateSaloonServiceSchema = Joi.object({
+    name: Joi.string().min(2).max(100).optional(),
+    description: Joi.string().allow(null, '').optional(),
+    price: Joi.number().positive().optional(),
+    duration: Joi.number().integer().min(5).allow(null).optional()
+}).min(1); // At least one field must be provided

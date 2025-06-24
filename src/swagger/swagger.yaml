@@ -1007,6 +1007,108 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /saloons/{id}/services/{serviceId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Saloon ID
+      - name: serviceId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Service ID
+    put:
+      summary: Update a service in a saloon
+      tags: [Saloons]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSaloonService"
+      responses:
+        "200":
+          description: Service updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Service updated successfully
+                      serviceId:
+                        type: integer
+                        example: 1
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      summary: Delete a service from a saloon
+      tags: [Saloons]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Service deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Service deleted successfully
+                      serviceId:
+                        type: integer
+                        example: 1
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          description: Cannot delete service with active appointments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Cannot delete service with pending or confirmed appointments"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
 # Components references
 components:
   schemas:
@@ -1322,6 +1424,33 @@ components:
           type: string
           example: "18:00"
           description: "Closing time in 24-hour format (HH:MM)"
+
+    UpdateSaloonService:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "Premium Haircut"
+          description: "Service name, must be at least 2 characters"
+        description:
+          type: string
+          maxLength: 500
+          example: "Premium haircut with professional styling and consultation"
+        price:
+          type: number
+          format: float
+          minimum: 0.01
+          example: 75.00
+          description: "Service price, must be a positive number"
+        duration:
+          type: integer
+          minimum: 5
+          maximum: 480
+          example: 90
+          description: "Duration in minutes, between 5 and 480 minutes"
 
     # Appointment related schemas
     CreateAppointment:
